@@ -17,7 +17,7 @@ services:
 
   api:
     environment:
-      - DB_URL="mysql+pymysql://appsavi:Appsavi0admin1@db:3306/appsavi"
+      - DB_URL=mysql+pymysql://appsavi:Appsavi0admin1@db:3306/appsavi
     build: .
     restart: unless-stopped
     depends_on:
