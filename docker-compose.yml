@@ -12,6 +12,8 @@ services:
       MYSQL_DATABASE: appsavi
       MYSQL_USER: appsavi
       MYSQL_PASSWORD: Appsavi0admin1
+    networks:
+      web:
     ports:
       - "3306:3306"
 
