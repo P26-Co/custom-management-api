@@ -3,7 +3,7 @@ version: "3.8"
 services:
   api:
     environment:
-      - DB_URL=mysql+pymysql://root:Appsavi0admin1@host.docker.internal:3306/appsavi
+      - DB_URL=mysql://root:Appsavi0admin1@host.docker.internal/appsavi
     extra_hosts:
       - "host.docker.internal:host-gateway"
     build: .
