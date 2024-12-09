@@ -1,14 +1,14 @@
-from typing import Annotated
-
 import jwt
+import requests
+import base64
 
+from typing import Annotated
 from datetime import datetime, timedelta, timezone
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
 
-from app.constants import SECRET_KEY, ALGORITHM
+from app.constants import *
 from app.schemas import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -45,4 +45,55 @@ def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 
 
 def zitadel_check(email: str, password: str):
-    return "1"  # zitadel user id
+    try:
+        token_res = requests.post(
+            f'{ZITADEL_DOMAIN}/oauth/v2/token',
+            headers={
+                'Authorization': f'Basic {base64.b64encode(f"{ZITADEL_CLIENT_ID}:{ZITADEL_CLIENT_SECRET}".encode()).decode()}',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            data={
+                'grant_type': 'client_credentials',
+                'scope': 'openid profile email urn:zitadel:iam:org:project:id:zitadel:aud',
+            }
+        )
+        if token_res.status_code == 200:
+            token = token_res.json().get('access_token')
+            if not token:
+                return None
+
+            session_res = requests.post(
+                f'{ZITADEL_DOMAIN}/v2beta/sessions',
+                headers={
+                    'Accept': 'application/json',
+                    'Authorization': f'Bearer {token}',
+                    'Content-Type': 'application/json',
+                },
+                json={'checks': {'user': {'loginName': email}}}
+            )
+
+            if session_res.status_code == 201:
+                session_info = session_res.json()
+                session_id = session_info['sessionId']
+                if not session_id:
+                    return None
+
+                response = requests.patch(
+                    f'{ZITADEL_DOMAIN}/v2beta/sessions/{session_id}',
+                    headers={
+                        'Accept': 'application/json',
+                        'Authorization': f'Bearer {token}',
+                        'Content-Type': 'application/json',
+                    },
+                    json={'checks': {'password': {'password': password}}}
+                )
+
+                if response.status_code == 200:
+                    print('Password verified successfully.')
+                    return True
+
+        return None  # zitadel user id
+
+    except Exception as e:
+        print(f'Error while verifying password: {e}')
+        return None

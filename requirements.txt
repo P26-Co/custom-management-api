@@ -4,3 +4,4 @@ pydantic-settings
 SQLAlchemy~=2.0.36
 pymysql
 pyjwt
+requests
