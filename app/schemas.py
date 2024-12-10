@@ -6,6 +6,7 @@ class LoginPassword(BaseModel):
     email: str
     password: str
     device_id: str
+    device_username: str
 
 
 # Pin Login schema (Pydantic Model)
@@ -13,6 +14,7 @@ class LoginPin(BaseModel):
     email: str
     pin: str
     device_id: str
+    device_username: str
 
 
 # Set Pin schema (Pydantic Model)
@@ -26,6 +28,7 @@ class User(BaseModel):
     zitadel_id: str
     email: str
     device_id: str
+    device_username: str
     token: str
 
     class Config:

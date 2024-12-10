@@ -8,4 +8,5 @@ class User(Base):
     zitadel_id = Column(String(256))
     email = Column(String(256))
     device_id = Column(String(256), default=None)
+    device_username = Column(String(256), default=None)
     pin = Column(String(12), default=None)

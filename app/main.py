@@ -42,7 +42,8 @@ async def login_password(data: schemas.LoginPassword, session: Session = Depends
     if user is None:
         user = models.User(
             email=data.email,
-            device_id=data.device_id
+            device_id=data.device_id,
+            device_username=data.device_username
         )
         session.add(user)
 
