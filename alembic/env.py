@@ -15,7 +15,7 @@ if config.config_file_name is not None:
 # Import your Base (and models) so Alembic sees them
 # -------------------------------------------------------
 # e.g. app.database.Base or app.models.Base
-from app.database import Base
+from app.database import Base, settings
 # Import all your models so they get attached to Base.metadata
 import app.models  # or from app import models
 
@@ -27,7 +27,7 @@ def run_migrations_offline():
     """
     Run migrations in 'offline' mode.
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
     context.configure(
         url=url,
         target_metadata=target_metadata,
