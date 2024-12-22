@@ -8,11 +8,7 @@ class Settings(BaseSettings):
     # ----------------------------------
     # DB Settings
     # ----------------------------------
-    SQLALCHEMY_DATABASE_URI: str = (
-        "mysql+pymysql://user:password@localhost/mydb"
-        if ENV == "production"
-        else "sqlite:///appsavi.db"
-    )
+    SQLALCHEMY_DATABASE_URI: str = "sqlite:///appsavi.db"
 
     JWT_SECRET_KEY: str = "SUPERSECRETKEY"
     JWT_ALGORITHM: str = "HS256"
