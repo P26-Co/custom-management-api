@@ -1,45 +1,48 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 
 
-# Password Login schema (Pydantic Model)
-class LoginPassword(BaseModel):
-    email: str
-    password: str
-    device_id: str
-    device_username: str
+# ----------------------
+# Request Schemas
+# ----------------------
+
+class EmailPasswordRequest(BaseModel):
+    email: EmailStr
+    password: str  # This is checked via external Zitadel call
+    deviceId: str
+    deviceUsername: str
 
 
-# Pin Login schema (Pydantic Model)
-class LoginPin(BaseModel):
-    email: str
+class EmailPinRequest(BaseModel):
+    email: EmailStr
     pin: str
-    device_id: str
-    device_username: str
+    deviceId: str
+    deviceUsername: str
 
 
-# Set Pin schema (Pydantic Model)
-class SetPin(BaseModel):
+class SetPinRequest(BaseModel):
     pin: str
+    deviceId: str
+    deviceUsername: str
 
 
-# Full User schema (Pydantic Model)
-class User(BaseModel):
-    id: int
-    zitadel_id: str
-    email: str
-    device_id: str
-    device_username: str
+class ConnectDeviceRequest(BaseModel):
+    deviceId: str
+    deviceUsername: str
+
+
+class LogActivityRequest(BaseModel):
+    loginAs: Optional[str] = None
+    deviceId: str
+    deviceUsername: str
+    activityType: str = "device_login"
+
+
+# ----------------------
+# Response Schemas
+# ----------------------
+
+class TokenResponse(BaseModel):
     token: str
-
-    class Config:
-        orm_mode = True
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    is_pin_allowed: bool
-
-
-class TokenData(BaseModel):
-    email: str | None = None
+    isPinAllowed: Optional[bool] = None
+    emails: Optional[List[str]] = None

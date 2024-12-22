@@ -1,7 +1,11 @@
-fastapi[standard]
+fastapi[standard]~=0.115.6
 pydantic~=2.10.3
-pydantic-settings
+pydantic-settings~=2.6.1
 SQLAlchemy~=2.0.36
 pymysql
-pyjwt
-requests
+requests~=2.32.3
+python-jose[cryptography]
+passlib~=1.7.4
+alembic~=1.14.0
+PyJWT~=2.10.1
+bcrypt

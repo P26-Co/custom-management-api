@@ -1,7 +1,8 @@
-SECRET_KEY = "7c2a4da702389681b756dc3e19b9f9feb36ee1a4644e6ee22bf88f78bdb0d77f"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+from enum import Enum
 
-ZITADEL_CLIENT_ID = 'python2'
-ZITADEL_CLIENT_SECRET = 'm11hxwbYUPQUBkIZltJUsBCzCqcCbyU2jjPcprgEvby7nUDpnvM8VEVo6ioSv2yb'
-ZITADEL_DOMAIN = 'https://id.appsavi.com'
+
+class ActivityType(str, Enum):
+    device_login = "device_login"
+    user_linked = "user_linked"
+    device_created = "device_created"
+    device_added = "device_added"

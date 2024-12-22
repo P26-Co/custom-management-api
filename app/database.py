@@ -4,14 +4,30 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 
-# Create an instance of SQLite engine
-engine = create_engine(
-    settings.DB_URL,
-    pool_recycle=1800
+if "sqlite" in settings.SQLALCHEMY_DATABASE_URI:
+    engine = create_engine(
+        settings.SQLALCHEMY_DATABASE_URI,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        settings.SQLALCHEMY_DATABASE_URI,
+        pool_recycle=1800
+    )
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False
 )
 
-# Create an instance of DeclarativeMeta
 Base = declarative_base()
 
-# Create the SessionLocal class from sessionmaker factory
-SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

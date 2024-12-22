@@ -19,7 +19,9 @@ services:
 
   api:
     environment:
-      - DB_URL=mysql+pymysql://appsavi:Appsavi0admin1@db:3306/appsavi
+      - ENV=production
+      - SQLALCHEMY_DATABASE_URI=mysql+pymysql://appsavi:Appsavi0admin1@db:3306/appsavi
+      - JWT_SECRET_KEY=7c2a4da702389681b756dc3e19b9f9feb36ee1a4644e6ee22bf88f78bdb0d77f
     build: .
     restart: unless-stopped
     depends_on:
