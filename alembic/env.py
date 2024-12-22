@@ -7,6 +7,7 @@ from sqlalchemy import engine_from_config, pool
 # provides access to values within the .ini file
 config = context.config
 
+
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -21,13 +22,14 @@ import app.models  # or from app import models
 
 # For “autogenerate” support, give Alembic a metadata target:
 target_metadata = Base.metadata
+config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
 
 
 def run_migrations_offline():
     """
     Run migrations in 'offline' mode.
     """
-    url = config.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,

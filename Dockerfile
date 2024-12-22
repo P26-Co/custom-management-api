@@ -11,6 +11,4 @@ COPY ./alembic.ini /code/alembic.ini
 COPY ./alembic /code/alembic
 COPY ./app /code/app
 
-RUN alembic upgrade head
-
 CMD ["fastapi", "run", "app/main.py", "--proxy-headers", "--port", "80"]
