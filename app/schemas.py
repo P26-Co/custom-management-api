@@ -51,31 +51,11 @@ class TokenResponse(BaseModel):
 
 
 # ----------------------
-# Admin Login
+# Admin
 # ----------------------
 class AdminLoginRequest(BaseModel):
     email: EmailStr
     password: str
-
-
-class AdminTokenResponse(BaseModel):
-    token: str
-    role: str = Role.ADMIN
-
-
-# ----------------------
-# Admin User CRUD
-# ----------------------
-class AdminUserCreateRequest(BaseModel):
-    email: EmailStr
-    name: str
-    password: str
-
-
-class AdminUserUpdateRequest(BaseModel):
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    password: Optional[str] = None
 
 
 class AdminUserResponse(BaseModel):
@@ -84,6 +64,24 @@ class AdminUserResponse(BaseModel):
     id: int
     email: EmailStr
     name: str
+
+
+class AdminUserCreateRequest(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
+
+
+class AdminTokenResponse(BaseModel):
+    token: str
+    role: str = Role.ADMIN
+    user: Optional[AdminUserResponse] = None
+
+
+class AdminUserUpdateRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    password: Optional[str] = None
 
 
 class ListAdminUsersFilters(BaseModel):
@@ -152,7 +150,7 @@ class ListDevicesFilters(BaseModel):
 class ListDeviceUsersFilters(BaseModel):
     tenantId: Optional[str] = None
     zitadelUserId: Optional[int] = None
-    deviceId: Optional[str] = None
+    deviceId: Optional[int] = None
     page: int = 1
     size: int = 10
 

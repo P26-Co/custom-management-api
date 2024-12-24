@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, Query, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -23,7 +24,8 @@ from app.schemas import (
     AdminUserResponse,
     AdminUserCreateRequest,
     ListAdminUsersFilters,
-    AdminUserUpdateRequest
+    AdminUserUpdateRequest,
+    DeviceSchema
 )
 from app.services import (
     email_password_login,
@@ -42,7 +44,8 @@ from app.services import (
     list_admin_users,
     get_admin_user_by_id,
     update_admin_user,
-    delete_admin_user
+    delete_admin_user,
+    update_device
 )
 
 # Create the Bearer security scheme
@@ -52,6 +55,20 @@ app = FastAPI(
     title="Custom Manager | AppSavi",
     root_path="/api/v1",
     version="1.0.0"
+)
+
+origins = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "https://manage.appsavi.com"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # or ["*"] for dev
+    allow_credentials=True,
+    allow_methods=["*"],  # or specify ['GET','POST',...]
+    allow_headers=["*"],  # or specify ['Content-Type','Authorization',...]
 )
 
 
@@ -160,7 +177,7 @@ def admin_login_api(payload: AdminLoginRequest, db: Session = Depends(get_db)):
     Req: email, password
     Res: token
     """
-    return AdminTokenResponse(token=admin_login(db, str(payload.email), payload.password))
+    return admin_login(db, str(payload.email), payload.password)
 
 
 @app.post("/shared-user")
@@ -222,18 +239,31 @@ def get_devices(
         db,
         ListDevicesFilters(
             tenantId=tenant_id,
-            zitadelUserId=zitadel_user_id,
+            zitadelUserId=zitadel_user_id if zitadel_user_id != 0 else None,
             page=page,
             size=size
         )
     )
 
 
+@app.patch("/devices/{device_id}", response_model=DeviceSchema)
+def update_admin_user_api(
+        payload: DeviceSchema,
+        db: Session = Depends(get_db),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    """
+    Update an existing admin user (email, password).
+    """
+    decoded = decode_access_token(credentials.credentials, True)
+    return update_device(db, payload, decoded.get("id"))
+
+
 @app.get("/device-users", response_model=PaginatedResponse)
 def get_device_users(
         tenant_id: str = Query(None),
         zitadel_user_id: int = Query(None),
-        device_id: str = Query(None),
+        device_id: int = Query(None),
         page: int = Query(1),
         size: int = Query(10),
         db: Session = Depends(get_db),
@@ -244,8 +274,8 @@ def get_device_users(
         db,
         ListDeviceUsersFilters(
             tenantId=tenant_id,
-            zitadelUserId=zitadel_user_id,
-            deviceId=device_id,
+            zitadelUserId=zitadel_user_id if zitadel_user_id != 0 else None,
+            deviceId=device_id if device_id != 0 else None,
             page=page,
             size=size
         )
@@ -267,8 +297,8 @@ def get_shared_users(
         db,
         ListSharedUsersFilters(
             tenantId=tenant_id,
-            zitadelUserId=zitadel_user_id,
-            deviceUserId=device_user_id,
+            zitadelUserId=zitadel_user_id if zitadel_user_id != 0 else None,
+            deviceUserId=device_user_id if device_user_id != 0 else None,
             page=page,
             size=size
         )

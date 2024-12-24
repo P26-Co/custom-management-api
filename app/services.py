@@ -33,7 +33,8 @@ from app.schemas import (
     DeviceSchema,
     DeviceUserSchema,
     ZitadelUserSchema,
-    SharedUserSchema
+    SharedUserSchema,
+    AdminTokenResponse
 )
 from app.utils import (
     verify_password,
@@ -49,6 +50,10 @@ def get_user_by_email(db: Session, email: str) -> Type[ZitadelUser] | None:
 
 def get_device_by_device_id(db: Session, device_id: str) -> Type[Device] | None:
     return db.query(Device).filter(Device.device_id == device_id).first()
+
+
+def get_device_by_id(db: Session, device_id: int) -> Type[Device] | None:
+    return db.query(Device).filter(Device.id == device_id).first()
 
 
 def create_device_if_not_exists(db: Session, device_id: str, user_id: int = None) -> Device:
@@ -324,7 +329,7 @@ def add_log_activity(
     return TokenResponse(token=create_access_token({"id": user.id, "email": user.email}))
 
 
-def admin_login(db: Session, email: str, password: str) -> str:
+def admin_login(db: Session, email: str, password: str) -> AdminTokenResponse:
     """
     Validate admin credentials, return JWT with role=admin if successful.
     """
@@ -333,11 +338,14 @@ def admin_login(db: Session, email: str, password: str) -> str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ErrorMessage.INVALID_CREDENTIALS)
 
     # Create admin token
-    return create_access_token({
-        "id": admin.id,
-        "email": admin.email,
-        "role": "admin"
-    })
+    return AdminTokenResponse(
+        token=create_access_token({
+            "id": admin.id,
+            "email": admin.email,
+            "role": "admin"
+        }),
+        user=AdminUserResponse.model_validate(admin)
+    )
 
 
 def create_admin_user(db: Session, payload: AdminUserCreateRequest, admin_id: int):
@@ -536,7 +544,7 @@ def list_devices(db: Session, filters: ListDevicesFilters) -> PaginatedResponse:
             DeviceSchema(
                 id=d.id,  # type: ignore
                 device_id=str(d.device_id),
-                name=str(d.name),
+                name=str(d.name) if d.name else None,
                 device_users=[
                     DeviceUserSchema(
                         id=du.id,
@@ -552,6 +560,26 @@ def list_devices(db: Session, filters: ListDevicesFilters) -> PaginatedResponse:
             )
             for d in items
         ]
+    )
+
+
+def update_device(db: Session, payload: DeviceSchema, admin_id: int) -> DeviceSchema:
+    device = get_device_by_id(db, payload.id)
+    if not device:
+        raise HTTPException(status_code=404, detail=ErrorMessage.DEVICE_NOT_FOUND)
+
+    if payload.name is not None:
+        device.name = payload.name
+
+    db.commit()
+    db.refresh(device)
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.UPDATE)
+
+    return DeviceSchema(
+        id=device.id, # type: ignore
+        device_id=str(device.device_id),
+        name=str(device.name),
     )
 
 
@@ -638,6 +666,11 @@ def list_shared_users(db: Session, filters: ListSharedUsersFilters) -> Paginated
                 device_user=DeviceUserSchema(
                     id=d.device_user_id,  # type: ignore
                     device_username=d.device_user.device_username,
+                    user=ZitadelUserSchema(
+                        id=d.device_user.zitadel_user_id,  # type: ignore
+                        name=d.device_user.zitadel_user.name,
+                        email=d.device_user.zitadel_user.email
+                    ),
                 ),
                 device=DeviceSchema(
                     id=d.device_user.device.id,
