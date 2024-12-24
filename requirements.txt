@@ -4,8 +4,6 @@ pydantic-settings~=2.6.1
 SQLAlchemy~=2.0.36
 pymysql
 requests~=2.32.3
-python-jose[cryptography]
-passlib~=1.7.4
 alembic~=1.14.0
 PyJWT~=2.10.1
-bcrypt
+libpass[bcrypt]

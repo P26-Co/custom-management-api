@@ -1,58 +1,46 @@
-import base64
-import jwt
-import requests
-
-from datetime import datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import List, Type
 
-from app.config import settings
-from app.constants import ActivityType
+from app.constants import (
+    DeviceActivityType,
+    AdminActivityAction,
+    ErrorMessage,
+    SuccessMessage
+)
 from app.models import (
     ZitadelUser,
-    Device,
-    DeviceUser,
+    AdminUser,
     SharedUser,
-    DeviceActivityLog
+    DeviceUser,
+    Device,
+    DeviceActivityLog,
+    AdminActivityLog
 )
-from app.schemas import TokenResponse
-from app.utils import hash_pin, verify_pin
-
-
-def create_access_token(data: dict, expires_delta: int = None):
-    if expires_delta is None:
-        expires_delta = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-
-    to_encode = data.copy()
-    to_encode.update({"exp": datetime.now(UTC) + timedelta(minutes=expires_delta)})
-
-    return jwt.encode(
-        to_encode,
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
-    )
-
-
-def decode_access_token(token: str):
-    try:
-        return jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+from app.schemas import (
+    TokenResponse,
+    GenericMessageResponse,
+    PaginatedResponse,
+    SharedUserCreateRequest,
+    ListZitadelUsersFilters,
+    ListDevicesFilters,
+    ListDeviceUsersFilters,
+    ListSharedUsersFilters,
+    ListAdminUsersFilters,
+    AdminUserCreateRequest,
+    AdminUserResponse,
+    AdminUserUpdateRequest,
+    DeviceSchema,
+    DeviceUserSchema,
+    ZitadelUserSchema,
+    SharedUserSchema
+)
+from app.utils import (
+    verify_password,
+    create_access_token,
+    verify_zitadel_credentials,
+    hash_password
+)
 
 
 def get_user_by_email(db: Session, email: str) -> Type[ZitadelUser] | None:
@@ -108,20 +96,19 @@ def get_shared_emails(
 
     # Step 3: Gather all SharedUser rows that match:
     #   shared_with_user_id == current_user_id, the same device PK, and the same device_username.
-    shared_entries = db.query(SharedUser).filter(
-        SharedUser.shared_with_user_id == current_user_id,
-        SharedUser.device_id == device.id,
-        SharedUser.device_username == device_username
-    ).all()
+    device_user = db.query(DeviceUser).filter(
+        DeviceUser.device_username == device_username
+    ).first()
 
     # Step 4: For each shared row, find the corresponding device_user,
     #         then find that device_user's owner => append owner’s email if not the current user.
-    for shared in shared_entries:
-        device_user = db.query(DeviceUser).filter(
-            DeviceUser.device_id == shared.device_id,
-            DeviceUser.device_username == shared.device_username
+    if device_user and device_user.zitadel_user_id != current_user_id:
+        shared_entry = db.query(SharedUser).filter(
+            SharedUser.shared_with_user_id == current_user_id,
+            SharedUser.device_user_id == device_user.id
         ).first()
-        if device_user and device_user.zitadel_user_id != current_user_id:
+
+        if shared_entry:
             owner_user = db.query(ZitadelUser).filter(
                 ZitadelUser.id == device_user.zitadel_user_id
             ).first()
@@ -137,7 +124,7 @@ def log_activity(
         device_id: int,
         device_username: str,
         login_as: str = None,
-        activity_type: str = ActivityType.device_login
+        activity_type: str = DeviceActivityType.device_login
 ):
     activity = DeviceActivityLog(
         zitadel_user_id=user_id,
@@ -165,10 +152,11 @@ def email_password_login(
         device_username: str
 ) -> TokenResponse:
     # 1) Validate with Zitadel
-    if not verify_zitadel_credentials(email, password):
+    zitadel_user = verify_zitadel_credentials(email, password)
+    if not zitadel_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Zitadel credentials."
+            detail=ErrorMessage.INVALID_ZITADEL_CREDENTIALS
         )
 
     # 2) Upsert user in local DB if it doesn't exist
@@ -176,8 +164,9 @@ def email_password_login(
     if not user:
         user = ZitadelUser(
             email=email,
-            zitadel_user_id=f"ext-{email}",  # Some external ID
-            tenant_id="example-tenant",
+            zitadel_user_id=zitadel_user['id'] if 'id' in zitadel_user else f"ext-{email}",  # Some external ID
+            tenant_id=zitadel_user['organizationId'] if 'organizationId' in zitadel_user else None,
+            name=zitadel_user['displayName'] if 'displayName' in zitadel_user else None,
             created_by=0
         )
         db.add(user)
@@ -202,14 +191,14 @@ def email_pin_login(
     if not user or not user.pin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User or PIN not set."
+            detail=ErrorMessage.PIN_NOT_SET
         )
 
     # Verify the pin
-    if not verify_pin(pin, user.pin):
+    if not verify_password(pin, user.pin):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid PIN."
+            detail=ErrorMessage.INVALID_PIN
         )
 
     return TokenResponse(
@@ -228,10 +217,10 @@ def set_pin(
 ) -> TokenResponse:
     user = db.query(ZitadelUser).filter(ZitadelUser.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
 
     # Hash the new pin
-    user.pin = hash_pin(new_pin)
+    user.pin = hash_password(new_pin)
     user.updated_by = user_id
     db.commit()
     db.refresh(user)
@@ -257,7 +246,7 @@ def connect_device(
 ) -> TokenResponse:
     user = db.query(ZitadelUser).filter(ZitadelUser.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
 
     device = create_device_if_not_exists(db, device_id, user_id=user_id)
 
@@ -278,9 +267,9 @@ def connect_device(
         db.add(device_user)
         db.commit()
         db.refresh(device_user)
-        activity_type = "device_created"
+        activity_type = DeviceActivityType.device_created
     else:
-        activity_type = "device_added"
+        activity_type = DeviceActivityType.device_added
 
     # log activity
     log_activity(
@@ -311,18 +300,15 @@ def add_log_activity(
         login_as: str,
         device_id: str,
         device_username: str,
-        activity_type: str = "device_login"
+        activity_type: str = DeviceActivityType.device_login
 ) -> TokenResponse:
     user = db.query(ZitadelUser).filter(ZitadelUser.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
 
     device = get_device_by_device_id(db, device_id)
     if not device:
-        raise HTTPException(
-            status_code=400,
-            detail="Device not found. Must connect the device first."
-        )
+        raise HTTPException(status_code=400, detail=ErrorMessage.DEVICE_NOT_FOUND)
 
     # log activity
     log_activity(
@@ -335,63 +321,335 @@ def add_log_activity(
     )
 
     # return token
-    return TokenResponse(
-        token=create_access_token({"id": user.id, "email": user.email})
+    return TokenResponse(token=create_access_token({"id": user.id, "email": user.email}))
+
+
+def admin_login(db: Session, email: str, password: str) -> str:
+    """
+    Validate admin credentials, return JWT with role=admin if successful.
+    """
+    admin = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if not admin or not verify_password(password, admin.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ErrorMessage.INVALID_CREDENTIALS)
+
+    # Create admin token
+    return create_access_token({
+        "id": admin.id,
+        "email": admin.email,
+        "role": "admin"
+    })
+
+
+def create_admin_user(db: Session, payload: AdminUserCreateRequest, admin_id: int):
+    existing = db.query(AdminUser).filter(AdminUser.email == payload.email).first()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorMessage.USER_EXISTS)
+
+    new_admin = AdminUser(
+        email=str(payload.email),
+        name=str(payload.name),
+        password=hash_password(payload.password)
+    )
+    db.add(new_admin)
+    db.commit()
+    db.refresh(new_admin)
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/admin-users", action=AdminActivityAction.CREATE)
+
+    return new_admin
+
+
+def list_admin_users(db: Session, filters: ListAdminUsersFilters) -> PaginatedResponse:
+    query = db.query(AdminUser)
+
+    if filters.search_email:
+        query = query.filter(AdminUser.email.contains(filters.search_email))
+
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        items=[AdminUserResponse.model_validate(u) for u in items],
+        total=total,
+        page=filters.page,
+        size=filters.size
     )
 
 
-def verify_zitadel_credentials(email: str, password: str) -> bool | None:
-    try:
-        token_res = requests.post(
-            f'{settings.ZITADEL_DOMAIN}/oauth/v2/token',
-            headers={
-                'Authorization': f'Basic {base64.b64encode(
-                    f"{settings.ZITADEL_CLIENT_ID}:{settings.ZITADEL_CLIENT_SECRET}".encode()
-                ).decode()}',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            data={
-                'grant_type': 'client_credentials',
-                'scope': 'openid profile email urn:zitadel:iam:org:project:id:zitadel:aud',
-            }
-        )
-        if token_res.status_code == 200:
-            token = token_res.json().get('access_token')
-            if not token:
-                return None
+def get_admin_user_by_id(db: Session, admin_user_id: int) -> Type[AdminUser]:
+    admin_user = db.query(AdminUser).filter(AdminUser.id == admin_user_id).first()
+    if not admin_user:
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
+    return admin_user
 
-            session_res = requests.post(
-                f'{settings.ZITADEL_DOMAIN}/v2beta/sessions',
-                headers={
-                    'Accept': 'application/json',
-                    'Authorization': f'Bearer {token}',
-                    'Content-Type': 'application/json',
-                },
-                json={'checks': {'user': {'loginName': email}}}
+
+def update_admin_user(db: Session, admin_user_id: int, payload: AdminUserUpdateRequest, admin_id: int):
+    admin_user = get_admin_user_by_id(db, admin_user_id)
+
+    if payload.email is not None:
+        # Check if another admin user has that email
+        existing = db.query(AdminUser).filter(
+            AdminUser.email == payload.email,
+            AdminUser.id != admin_user_id
+        ).first()
+        if existing:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorMessage.EMAIL_EXISTS)
+        admin_user.email = payload.email
+
+    if payload.password is not None:
+        admin_user.password = hash_password(payload.password)
+
+    if payload.name is not None:
+        admin_user.name = payload.name
+
+    db.commit()
+    db.refresh(admin_user)
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/admin-users", action=AdminActivityAction.UPDATE)
+
+    return admin_user
+
+
+def delete_admin_user(db: Session, admin_user_id: int, admin_id: int) -> GenericMessageResponse:
+    admin_user = get_admin_user_by_id(db, admin_user_id)
+    db.delete(admin_user)
+    db.commit()
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/admin-users", action=AdminActivityAction.DELETE)
+
+    return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
+
+
+def log_admin_activity(db: Session, admin_id: int, endpoint: str, action: str = "") -> None:
+    """
+    Insert a row in admin_activity_logs to track usage.
+    """
+    entry = AdminActivityLog(
+        admin_user_id=admin_id,
+        endpoint=endpoint,
+        action=action
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+
+def share_device_user(db: Session, admin_id: int, payload: SharedUserCreateRequest) -> SharedUser:
+    """
+    Creates a SharedUser entry, effectively sharing a deviceUser with a specified Zitadel user.
+    """
+    device = db.query(Device).filter(Device.id == payload.deviceId).first()
+    if not device:
+        raise HTTPException(status_code=404, detail=ErrorMessage.DEVICE_NOT_FOUND)
+
+    device_user = db.query(DeviceUser).filter(DeviceUser.id == payload.deviceUserId).first()
+    if not device_user:
+        raise HTTPException(status_code=404, detail=ErrorMessage.DEVICE_USER_NOT_FOUND)
+
+    to_share_user = db.query(ZitadelUser).filter(ZitadelUser.id == payload.zitadelUserId).first()
+    if not to_share_user:
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
+
+    new_shared = SharedUser(
+        device_user_id=device_user.id,  # type: ignore
+        shared_with_user_id=to_share_user.id,  # type: ignore
+        created_by=admin_id,
+    )
+    db.add(new_shared)
+    db.commit()
+    db.refresh(new_shared)
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.CREATE)
+
+    return new_shared
+
+
+def remove_shared_user(db: Session, admin_id: int, shared_user_id: int) -> GenericMessageResponse:
+    """
+    Deletes a SharedUser entry by its primary key.
+    """
+    shared_to_remove = db.query(SharedUser).filter(SharedUser.id == shared_user_id).first()
+    if not shared_to_remove:
+        raise HTTPException(status_code=404, detail=ErrorMessage.SHARED_USER_NOT_FOUND)
+
+    db.delete(shared_to_remove)
+    db.commit()
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.DELETE)
+
+    return GenericMessageResponse(message=SuccessMessage.SHARED_USER_REMOVED)
+
+
+def list_zitadel_users(db: Session, filters: ListZitadelUsersFilters) -> PaginatedResponse:
+    """
+    Return a paginated list of ZitadelUser rows, optionally filtered by tenant_id.
+    """
+    query = db.query(ZitadelUser)
+    if filters.tenantId:
+        query = query.filter(ZitadelUser.tenant_id == filters.tenantId)
+
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            ZitadelUserSchema(
+                id=u.id,  # type: ignore
+                email=str(u.email),
+                name=str(u.name),
+                tenant_id=str(u.tenant_id),
+                zitadel_user_id=str(u.zitadel_user_id),
             )
+            for u in items
+        ]
+    )
 
-            if session_res.status_code == 201:
-                session_info = session_res.json()
-                session_id = session_info['sessionId']
-                if not session_id:
-                    return None
 
-                response = requests.patch(
-                    f'{settings.ZITADEL_DOMAIN}/v2beta/sessions/{session_id}',
-                    headers={
-                        'Accept': 'application/json',
-                        'Authorization': f'Bearer {token}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={'checks': {'password': {'password': password}}}
+def list_devices(db: Session, filters: ListDevicesFilters) -> PaginatedResponse:
+    """
+    Return a paginated list of Devices, optionally filtered by tenant, user.
+    """
+    query = db.query(Device)
+
+    if filters.tenantId:
+        # To filter by tenant, we join to device_users -> zitadel_user
+        query = query.join(DeviceUser).join(ZitadelUser).filter(
+            ZitadelUser.tenant_id == filters.tenantId
+        )
+
+    if filters.zitadelUserId:
+        # Also filter devices for that user: device -> device_users => userId
+        query = query.join(DeviceUser).filter(DeviceUser.zitadel_user_id == filters.zitadelUserId)
+
+    query = query.distinct()
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            DeviceSchema(
+                id=d.id,  # type: ignore
+                device_id=str(d.device_id),
+                name=str(d.name),
+                device_users=[
+                    DeviceUserSchema(
+                        id=du.id,
+                        device_username=du.device_username,
+                        user=ZitadelUserSchema(
+                            id=du.zitadel_user_id,
+                            name=du.zitadel_user.name,
+                            email=du.zitadel_user.email
+                        ),
+                    )
+                    for du in d.device_users
+                ],
+            )
+            for d in items
+        ]
+    )
+
+
+def list_device_users(db: Session, filters: ListDeviceUsersFilters) -> PaginatedResponse:
+    """
+    Return a paginated list of DeviceUser rows, optionally filtered by tenant, user, device.
+    """
+    query = db.query(DeviceUser)
+
+    if filters.tenantId:
+        # join device_users -> zitadel_user => match tenant
+        query = query.join(ZitadelUser).filter(ZitadelUser.tenant_id == filters.tenantId)
+
+    if filters.zitadelUserId:
+        query = query.filter(DeviceUser.zitadel_user_id == filters.zitadelUserId)
+
+    if filters.deviceId:
+        query = query.join(Device).filter(Device.id == filters.deviceId)
+
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            DeviceUserSchema(
+                id=d.id,  # type: ignore
+                device_username=str(d.device_username),
+                user=ZitadelUserSchema(
+                    id=d.zitadel_user_id,  # type: ignore
+                    name=d.zitadel_user.name,
+                    email=d.zitadel_user.email
+                ),
+                device=DeviceSchema(
+                    id=d.device_id,  # type: ignore
+                    name=d.device.name,
+                    device_id=d.device.device_id
                 )
+            )
+            for d in items
+        ]
+    )
 
-                if response.status_code == 200:
-                    print('Password verified successfully.')
-                    return True
 
-        return None  # zitadel user id
+def list_shared_users(db: Session, filters: ListSharedUsersFilters) -> PaginatedResponse:
+    """
+    Return a paginated list of SharedUser rows, optionally filtered by tenant, user, device, deviceUserId.
+    """
+    query = db.query(SharedUser)
 
-    except Exception as e:
-        print(f'Error while verifying password: {e}')
-        return None
+    # If tenantId is provided, we must join through device -> device_users -> zitadel_user => tenant_id
+    if filters.tenantId:
+        query = query.join(
+            DeviceUser, (DeviceUser.id == SharedUser.device_user_id)
+        ).join(
+            ZitadelUser, DeviceUser.zitadel_user_id == ZitadelUser.id
+        ).filter(
+            ZitadelUser.tenant_id == filters.tenantId
+        )
+
+    if filters.zitadelUserId:
+        query = query.filter(SharedUser.shared_with_user_id == filters.zitadelUserId)
+
+    if filters.deviceUserId:
+        query = query.join(
+            DeviceUser, DeviceUser.id == SharedUser.device_user_id
+        ).filter(
+            DeviceUser.id == filters.deviceUserId
+        )
+
+    query = query.distinct()
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            SharedUserSchema(
+                id=d.id,  # type: ignore
+                device_user=DeviceUserSchema(
+                    id=d.device_user_id,  # type: ignore
+                    device_username=d.device_user.device_username,
+                ),
+                device=DeviceSchema(
+                    id=d.device_user.device.id,
+                    device_id=d.device_user.device.device_id,
+                    name=d.device_user.device.name
+                ),
+                user=ZitadelUserSchema(
+                    id=d.shared_with_user_id,  # type: ignore
+                    name=d.shared_with_user.name,
+                    email=d.shared_with_user.email
+                )
+            )
+            for d in items
+        ]
+    )
