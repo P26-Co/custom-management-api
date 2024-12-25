@@ -45,7 +45,10 @@ from app.services import (
     get_admin_user_by_id,
     update_admin_user,
     delete_admin_user,
-    update_device
+    update_device,
+    delete_zitadel_user,
+    delete_device,
+    delete_device_user
 )
 
 # Create the Bearer security scheme
@@ -64,7 +67,7 @@ origins = [
 ]
 
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore
     allow_origins=origins,  # or ["*"] for dev
     allow_credentials=True,
     allow_methods=["*"],  # or specify ['GET','POST',...]
@@ -225,6 +228,19 @@ def get_zitadel_users(
     )
 
 
+@app.delete("/zitadel-users/{user_id}", response_model=GenericMessageResponse)
+def delete_zitadel_user_api(
+        user_id: int = Path(...),
+        db: Session = Depends(get_db),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    """
+    Delete an zitadel user by ID.
+    """
+    decoded = decode_access_token(credentials.credentials, True)
+    return delete_zitadel_user(db, user_id, decoded.get("id"))
+
+
 @app.get("/devices", response_model=PaginatedResponse)
 def get_devices(
         tenant_id: str = Query(None),
@@ -259,6 +275,19 @@ def update_admin_user_api(
     return update_device(db, payload, decoded.get("id"))
 
 
+@app.delete("/devices/{device_id}", response_model=GenericMessageResponse)
+def delete_device_api(
+        device_id: int = Path(...),
+        db: Session = Depends(get_db),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    """
+    Delete a device by ID.
+    """
+    decoded = decode_access_token(credentials.credentials, True)
+    return delete_device(db, device_id, decoded.get("id"))
+
+
 @app.get("/device-users", response_model=PaginatedResponse)
 def get_device_users(
         tenant_id: str = Query(None),
@@ -280,6 +309,19 @@ def get_device_users(
             size=size
         )
     )
+
+
+@app.delete("/device-users/{device_user_id}", response_model=GenericMessageResponse)
+def delete_device_user_api(
+        device_user_id: int = Path(...),
+        db: Session = Depends(get_db),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+):
+    """
+    Delete a device user by ID.
+    """
+    decoded = decode_access_token(credentials.credentials, True)
+    return delete_device_user(db, device_user_id, decoded.get("id"))
 
 
 @app.get("/shared-users", response_model=PaginatedResponse)

@@ -107,7 +107,7 @@ class GenericMessageResponse(BaseModel):
 class ZitadelUserSchema(BaseModel):
     id: int
     email: str
-    name: Optional[str]
+    name: Optional[str | None]
     tenant_id: Optional[str] = None
     zitadel_user_id: Optional[str] = None
 

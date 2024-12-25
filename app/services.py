@@ -523,6 +523,34 @@ def list_zitadel_users(db: Session, filters: ListZitadelUsersFilters) -> Paginat
     )
 
 
+def get_zitadel_user_by_id(db: Session, zitadel_user_id: int) -> Type[ZitadelUser]:
+    zitadel_user = db.query(ZitadelUser).filter(ZitadelUser.id == zitadel_user_id).first()
+    if not zitadel_user:
+        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
+    return zitadel_user
+
+
+def delete_zitadel_user(db: Session, zitadel_user_id: int, admin_id: int) -> GenericMessageResponse:
+    shared_users = db.query(SharedUser).filter(SharedUser.shared_with_user_id == zitadel_user_id).all()
+    for shared_user in shared_users:
+        db.delete(shared_user)
+
+    device_users = db.query(DeviceUser).filter(DeviceUser.zitadel_user_id == zitadel_user_id).all()
+    for device_user in device_users:
+        shared_users = db.query(SharedUser).filter(SharedUser.device_user_id == device_user.id).all()
+        for shared_user in shared_users:
+            db.delete(shared_user)
+        db.delete(device_user)
+
+    zitadel_user = get_zitadel_user_by_id(db, zitadel_user_id)
+    db.delete(zitadel_user)
+    db.commit()
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/zitadel-users", action=AdminActivityAction.DELETE)
+
+    return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
+
+
 def list_devices(db: Session, filters: ListDevicesFilters) -> PaginatedResponse:
     """
     Return a paginated list of Devices, optionally filtered by tenant, user.
@@ -590,6 +618,23 @@ def update_device(db: Session, payload: DeviceSchema, admin_id: int) -> DeviceSc
     )
 
 
+def delete_device(db: Session, device_id: int, admin_id: int) -> GenericMessageResponse:
+    device_users = db.query(DeviceUser).filter(DeviceUser.device_id == device_id).all()
+    for device_user in device_users:
+        shared_users = db.query(SharedUser).filter(SharedUser.device_user_id == device_user.id).all()
+        for shared_user in shared_users:
+            db.delete(shared_user)
+        db.delete(device_user)
+
+    device = get_device_by_id(db, device_id)
+    db.delete(device)
+    db.commit()
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.DELETE)
+
+    return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
+
+
 def list_device_users(db: Session, filters: ListDeviceUsersFilters) -> PaginatedResponse:
     """
     Return a paginated list of DeviceUser rows, optionally filtered by tenant, user, device.
@@ -604,7 +649,7 @@ def list_device_users(db: Session, filters: ListDeviceUsersFilters) -> Paginated
         query = query.filter(DeviceUser.zitadel_user_id == filters.zitadelUserId)
 
     if filters.deviceId:
-        query = query.join(Device).filter(Device.id == filters.deviceId)
+        query = query.filter(DeviceUser.device_id == filters.deviceId)
 
     total = query.count()
     items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
@@ -631,6 +676,24 @@ def list_device_users(db: Session, filters: ListDeviceUsersFilters) -> Paginated
             for d in items
         ]
     )
+
+
+def get_device_user_by_id(db: Session, device_user_id: int) -> Type[DeviceUser] | None:
+    return db.query(DeviceUser).filter(DeviceUser.id == device_user_id).first()
+
+
+def delete_device_user(db: Session, device_user_id: int, admin_id: int) -> GenericMessageResponse:
+    shared_users = db.query(SharedUser).filter(SharedUser.device_user_id == device_user_id).all()
+    for shared_user in shared_users:
+        db.delete(shared_user)
+
+    device = get_device_user_by_id(db, device_user_id)
+    db.delete(device)
+    db.commit()
+
+    log_admin_activity(db, admin_id=admin_id, endpoint="/device-users", action=AdminActivityAction.DELETE)
+
+    return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
 
 
 def list_shared_users(db: Session, filters: ListSharedUsersFilters) -> PaginatedResponse:

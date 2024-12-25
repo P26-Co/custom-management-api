@@ -28,7 +28,7 @@ class ErrorMessage(str, Enum):
     UNKNOWN_ERROR = "Unknown error"
     USER_NOT_FOUND = "User not found"
     SHARED_USER_NOT_FOUND = "Shared user not found"
-    SHARED_USER_EXISTS = "Shared user already exists"
+    SHARED_USER_EXISTS = "Shared user already exists for the device user"
     USER_EXISTS = "User already exists"
     EMAIL_EXISTS = "Another user with this email already exists."
     TOKEN_EXPIRED = "Token expired"
