@@ -446,17 +446,24 @@ def share_device_user(db: Session, admin_id: int, payload: SharedUserCreateReque
     """
     Creates a SharedUser entry, effectively sharing a deviceUser with a specified Zitadel user.
     """
+    exist_record = db.query(SharedUser).filter(
+        SharedUser.device_user_id == payload.deviceUserId,
+        SharedUser.shared_with_user_id == payload.zitadelUserId
+    ).first()
+    if exist_record:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ErrorMessage.SHARED_USER_EXISTS)
+
     device = db.query(Device).filter(Device.id == payload.deviceId).first()
     if not device:
-        raise HTTPException(status_code=404, detail=ErrorMessage.DEVICE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorMessage.DEVICE_NOT_FOUND)
 
     device_user = db.query(DeviceUser).filter(DeviceUser.id == payload.deviceUserId).first()
     if not device_user:
-        raise HTTPException(status_code=404, detail=ErrorMessage.DEVICE_USER_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorMessage.DEVICE_USER_NOT_FOUND)
 
     to_share_user = db.query(ZitadelUser).filter(ZitadelUser.id == payload.zitadelUserId).first()
     if not to_share_user:
-        raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ErrorMessage.USER_NOT_FOUND)
 
     new_shared = SharedUser(
         device_user_id=device_user.id,  # type: ignore
@@ -577,7 +584,7 @@ def update_device(db: Session, payload: DeviceSchema, admin_id: int) -> DeviceSc
     log_admin_activity(db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.UPDATE)
 
     return DeviceSchema(
-        id=device.id, # type: ignore
+        id=device.id,  # type: ignore
         device_id=str(device.device_id),
         name=str(device.name),
     )
