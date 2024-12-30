@@ -206,6 +206,7 @@ def get_admin_logs(
         zitadel_user_id: int = Query(None),
         device_id: int = Query(None),
         device_user_id: int = Query(None),
+        shared_user_id: int = Query(None),
         page: int = Query(1),
         size: int = Query(10),
         credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
@@ -220,6 +221,7 @@ def get_admin_logs(
             zitadelUserId=zitadel_user_id,
             deviceId=device_id,
             deviceUserId=device_user_id,
+            sharedUserId=shared_user_id,
             page=page,
             size=size
         )
