@@ -1,8 +1,8 @@
 """create tables
 
-Revision ID: a2da679d1545
+Revision ID: 2cf444e46d89
 Revises: 
-Create Date: 2024-12-30 22:56:01.160033
+Create Date: 2024-12-31 01:28:43.912300
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a2da679d1545'
+revision: str = '2cf444e46d89'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -108,7 +108,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_shared_users_id'), 'shared_users', ['id'], unique=False)
     op.create_table('admin_activity_logs',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('admin_user_id', sa.Integer(), nullable=False),
+    sa.Column('admin_user_id', sa.Integer(), nullable=True),
     sa.Column('endpoint', sa.String(length=255), nullable=False),
     sa.Column('action', sa.String(length=255), nullable=True),
     sa.Column('timestamp', sa.DateTime(), nullable=True),
@@ -120,7 +120,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_by', sa.Integer(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.ForeignKeyConstraint(['admin_user_id'], ['admin_users.id'], ),
+    sa.ForeignKeyConstraint(['admin_user_id'], ['admin_users.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['device_id'], ['devices.id'], ),
     sa.ForeignKeyConstraint(['device_user_id'], ['device_users.id'], ),
     sa.ForeignKeyConstraint(['shared_user_id'], ['shared_users.id'], ),
