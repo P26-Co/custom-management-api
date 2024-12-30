@@ -1,3 +1,4 @@
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from typing import List, Type
@@ -352,7 +353,13 @@ def list_device_logs(db: Session, filters: ListDeviceLogsFilters) -> PaginatedRe
         query = query.filter(DeviceActivityLog.device_username == filters.deviceUserId)
 
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(DeviceActivityLog.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
@@ -434,7 +441,13 @@ def list_admin_users(db: Session, filters: ListAdminUsersFilters) -> PaginatedRe
         query = query.filter(AdminUser.email.contains(filters.search_email))
 
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(AdminUser.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         items=[AdminUserResponse.model_validate(u) for u in items],
@@ -537,7 +550,13 @@ def list_admin_logs(db: Session, filters: ListAdminLogsFilters) -> PaginatedResp
         query = query.filter(AdminActivityLog.shared_user_id == filters.sharedUserId)
 
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(AdminActivityLog.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
@@ -667,7 +686,13 @@ def list_zitadel_users(db: Session, filters: ListZitadelUsersFilters) -> Paginat
         query = query.filter(ZitadelUser.tenant_id == filters.tenantId)
 
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(ZitadelUser.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
@@ -735,7 +760,13 @@ def list_devices(db: Session, filters: ListDevicesFilters) -> PaginatedResponse:
 
     query = query.distinct()
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(Device.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
@@ -823,7 +854,13 @@ def list_device_users(db: Session, filters: ListDeviceUsersFilters) -> Paginated
         query = query.filter(DeviceUser.device_id == filters.deviceId)
 
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(DeviceUser.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
@@ -902,7 +939,13 @@ def list_shared_users(db: Session, filters: ListSharedUsersFilters) -> Paginated
 
     query = query.distinct()
     total = query.count()
-    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+    items = (
+        query
+        .order_by(desc(SharedUser.created_at))
+        .offset((filters.page - 1) * filters.size)
+        .limit(filters.size)
+        .all()
+    )
 
     return PaginatedResponse(
         total=total,
