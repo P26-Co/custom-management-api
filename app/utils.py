@@ -61,66 +61,64 @@ def paginate_query(query, page: int, size: int):
 
 
 def verify_zitadel_credentials(email: str, password: str) -> dict | None:
-    try:
-        token_res = requests.post(
-            f'{settings.ZITADEL_DOMAIN}/oauth/v2/token',
-            headers={
-                'Authorization': f'Basic {base64.b64encode(
-                    f"{settings.ZITADEL_CLIENT_ID}:{settings.ZITADEL_CLIENT_SECRET}".encode()
-                ).decode()}',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            data={
-                'grant_type': 'client_credentials',
-                'scope': 'openid profile email urn:zitadel:iam:org:project:id:zitadel:aud',
-            }
-        )
-        if token_res.status_code == 200:
-            token = token_res.json().get('access_token')
-            if not token:
-                raise HTTPException(status_code=500, detail=ErrorMessage.UNKNOWN_ERROR)
+    res = requests.post(
+        f'{settings.ZITADEL_DOMAIN}/oauth/v2/token',
+        headers={
+            'Authorization': f'Basic {base64.b64encode(
+                f"{settings.ZITADEL_CLIENT_ID}:{settings.ZITADEL_CLIENT_SECRET}".encode()
+            ).decode()}',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        data={
+            'grant_type': 'client_credentials',
+            'scope': 'openid profile email urn:zitadel:iam:org:project:id:zitadel:aud',
+        }
+    )
+    if res.status_code == 200:
+        token = res.json().get('access_token')
+        if not token:
+            raise HTTPException(status_code=500, detail=ErrorMessage.UNKNOWN_ERROR)
 
-            session_res = requests.post(
-                f'{settings.ZITADEL_DOMAIN}/v2beta/sessions',
+        res = requests.post(
+            f'{settings.ZITADEL_DOMAIN}/v2beta/sessions',
+            headers={
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+            },
+            json={'checks': {'user': {'loginName': email}}}
+        )
+
+        if res.status_code == 201:
+            session_info = res.json()
+            session_id = session_info.get('sessionId')
+            if not session_id:
+                raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
+
+            res = requests.patch(
+                f'{settings.ZITADEL_DOMAIN}/v2beta/sessions/{session_id}',
                 headers={
                     'Accept': 'application/json',
                     'Authorization': f'Bearer {token}',
                     'Content-Type': 'application/json',
                 },
-                json={'checks': {'user': {'loginName': email}}}
+                json={'checks': {'password': {'password': password}}}
             )
 
-            if session_res.status_code == 201:
-                session_info = session_res.json()
-                session_id = session_info['sessionId']
-                if not session_id:
-                    raise HTTPException(status_code=404, detail=ErrorMessage.USER_NOT_FOUND)
-
-                response = requests.patch(
+            if res.status_code == 200:
+                res = requests.get(
                     f'{settings.ZITADEL_DOMAIN}/v2beta/sessions/{session_id}',
                     headers={
                         'Accept': 'application/json',
                         'Authorization': f'Bearer {token}',
                         'Content-Type': 'application/json',
-                    },
-                    json={'checks': {'password': {'password': password}}}
+                    }
                 )
+                session = res.json()
+                if session and session.get('session', {}).get('factors', {}).get('user'):
+                    return session['session']['factors']['user']  # zitadel user id
 
-                if response.status_code == 200:
-                    response = requests.get(
-                        f'{settings.ZITADEL_DOMAIN}/v2beta/sessions/{session_id}',
-                        headers={
-                            'Accept': 'application/json',
-                            'Authorization': f'Bearer {token}',
-                            'Content-Type': 'application/json',
-                        }
-                    )
-                    session = response.json()
-                    if session and session.get('session', {}).get('factors', {}).get('user'):
-                        return session['session']['factors']['user']  # zitadel user id
-
-        raise HTTPException(status_code=401, detail=ErrorMessage.INVALID_ZITADEL_CREDENTIALS)
-
-    except Exception as e:
-        print(f'Error while verifying password: {e}')
-        raise HTTPException(status_code=500, detail=ErrorMessage.UNKNOWN_ERROR)
+    if res.json().get('message'):
+        raise HTTPException(status_code=401, detail=res.json().get('message'))
+    else:
+        return None
