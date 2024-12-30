@@ -106,7 +106,7 @@ class AdminActivityLog(Base, AuditColumnsMixin):
     __tablename__ = "admin_activity_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    admin_user_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False)
+    admin_user_id = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
     endpoint = Column(String(255), nullable=False)  # which endpoint was accessed
     action = Column(String(255), nullable=True)  # e.g. "CREATE", "DELETE", "LIST"
     timestamp = Column(DateTime, default=func.now())

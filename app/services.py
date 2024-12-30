@@ -568,7 +568,7 @@ def list_admin_logs(db: Session, filters: ListAdminLogsFilters) -> PaginatedResp
                 timestamp=str(d.timestamp),
                 endpoint=str(d.endpoint),
                 action=str(d.action) if d.action else None,
-                admin_user=AdminUserResponse.model_validate(d.admin_user),
+                admin_user=AdminUserResponse.model_validate(d.admin_user) if d.admin_user else None,
                 device_username=DeviceUserSchema(
                     id=d.device_user_id,  # type: ignore
                     device_username=d.device_user.device_username if d.device_user else None,

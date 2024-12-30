@@ -147,7 +147,7 @@ class AdminLogsSchema(BaseModel):
     id: int
     timestamp: str
     endpoint: str
-    admin_user: AdminUserResponse
+    admin_user: Optional[AdminUserResponse] = None
     action: Optional[str] = None
     device_username: Optional[DeviceUserSchema] = None
     user: Optional[ZitadelUserSchema] = None
