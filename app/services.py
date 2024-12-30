@@ -34,7 +34,11 @@ from app.schemas import (
     DeviceUserSchema,
     ZitadelUserSchema,
     SharedUserSchema,
-    AdminTokenResponse
+    AdminTokenResponse,
+    ListDeviceLogsFilters,
+    DeviceLogsSchema,
+    ListAdminLogsFilters,
+    AdminLogsSchema
 )
 from app.utils import (
     verify_password,
@@ -127,7 +131,7 @@ def log_activity(
         db: Session,
         user_id: int,
         device_id: int,
-        device_username: str,
+        device_username: int,
         login_as: str = None,
         activity_type: str = DeviceActivityType.device_login
 ):
@@ -281,7 +285,7 @@ def connect_device(
         db,
         user.id,  # type: ignore
         device.id,
-        device_username,
+        device_user.id,
         login_as=None,
         activity_type=activity_type
     )
@@ -315,18 +319,74 @@ def add_log_activity(
     if not device:
         raise HTTPException(status_code=400, detail=ErrorMessage.DEVICE_NOT_FOUND)
 
+    device_user = get_device_user_by_username(db, device_username)
+    if not device:
+        raise HTTPException(status_code=400, detail=ErrorMessage.DEVICE_USER_NOT_FOUND)
+
     # log activity
     log_activity(
         db,
         user.id,  # type: ignore
         device.id,  # type: ignore
-        device_username,
+        device_user.id,  # type: ignore
         login_as=login_as,
         activity_type=activity_type
     )
 
     # return token
     return TokenResponse(token=create_access_token({"id": user.id, "email": user.email}))
+
+
+def list_device_logs(db: Session, filters: ListDeviceLogsFilters) -> PaginatedResponse:
+    query = db.query(DeviceActivityLog)
+    if filters.tenantId:
+        query = query.join(ZitadelUser).filter(ZitadelUser.tenant_id == filters.tenantId)
+
+    if filters.zitadelUserId:
+        query = query.filter(DeviceActivityLog.zitadel_user_id == filters.zitadelUserId)
+
+    if filters.deviceId:
+        query = query.filter(DeviceActivityLog.device_id == filters.deviceId)
+
+    if filters.deviceUserId:
+        query = query.filter(DeviceActivityLog.device_username == filters.deviceUserId)
+
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            DeviceLogsSchema(
+                id=d.id,  # type: ignore
+                timestamp=str(d.timestamp),
+                activity_type=str(d.activity_type),
+                login_as=str(d.login_as),
+                device_username=DeviceUserSchema(
+                    id=d.device_username,  # type: ignore
+                    device_username=d.device_user.device_username,
+                    user=ZitadelUserSchema(
+                        id=d.device_user.zitadel_user_id,  # type: ignore
+                        name=d.device_user.zitadel_user.name,
+                        email=d.device_user.zitadel_user.email
+                    ),
+                ),
+                user=ZitadelUserSchema(
+                    id=d.zitadel_user_id,  # type: ignore
+                    name=d.zitadel_user.name,
+                    email=d.zitadel_user.email
+                ),
+                device=DeviceSchema(
+                    id=d.device_id,  # type: ignore
+                    name=d.device.name,
+                    device_id=d.device.device_id
+                )
+            )
+            for d in items
+        ]
+    )
 
 
 def admin_login(db: Session, email: str, password: str) -> AdminTokenResponse:
@@ -428,18 +488,113 @@ def delete_admin_user(db: Session, admin_user_id: int, admin_id: int) -> Generic
     return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
 
 
-def log_admin_activity(db: Session, admin_id: int, endpoint: str, action: str = "") -> None:
+def log_admin_activity(
+        db: Session,
+        admin_id: int,
+        endpoint: str,
+        action: str = "",
+        zitadel_user_id: int = None,
+        device_id: int = None,
+        device_user_id: int = None,
+        shared_user_id: int = None
+) -> None:
     """
     Insert a row in admin_activity_logs to track usage.
     """
     entry = AdminActivityLog(
         admin_user_id=admin_id,
         endpoint=endpoint,
-        action=action
+        action=action,
+        zitadel_user_id=zitadel_user_id,
+        device_id=device_id,
+        device_user_id=device_user_id,
+        shared_user_id=shared_user_id,
+        created_by=admin_id
     )
     db.add(entry)
     db.commit()
     db.refresh(entry)
+
+
+def list_admin_logs(db: Session, filters: ListAdminLogsFilters) -> PaginatedResponse:
+    query = db.query(AdminActivityLog)
+    if filters.tenantId:
+        query = query.join(ZitadelUser).filter(ZitadelUser.tenant_id == filters.tenantId)
+
+    if filters.adminUserId:
+        query = query.filter(AdminActivityLog.admin_user_id == filters.adminUserId)
+
+    if filters.zitadelUserId:
+        query = query.filter(AdminActivityLog.zitadel_user_id == filters.zitadelUserId)
+
+    if filters.deviceId:
+        query = query.filter(AdminActivityLog.device_id == filters.deviceId)
+
+    if filters.deviceUserId:
+        query = query.filter(AdminActivityLog.device_user_id == filters.deviceUserId)
+
+    if filters.sharedUserId:
+        query = query.filter(AdminActivityLog.shared_user_id == filters.sharedUserId)
+
+    total = query.count()
+    items = query.offset((filters.page - 1) * filters.size).limit(filters.size).all()
+
+    return PaginatedResponse(
+        total=total,
+        page=filters.page,
+        size=filters.size,
+        items=[
+            AdminLogsSchema(
+                id=d.id,  # type: ignore
+                timestamp=str(d.timestamp),
+                endpoint=str(d.endpoint),
+                action=str(d.action),
+                admin_user=AdminUserResponse.model_validate(d.admin_user),
+                device_username=DeviceUserSchema(
+                    id=d.device_user_id,  # type: ignore
+                    device_username=d.device_user.device_username if d.device_user else None,
+                    user=ZitadelUserSchema(
+                        id=d.device_user.zitadel_user_id,  # type: ignore
+                        name=d.device_user.zitadel_user.name,
+                        email=d.device_user.zitadel_user.email
+                    ) if d.device_user else None,
+                ) if d.device_user_id else None,
+                user=ZitadelUserSchema(
+                    id=d.zitadel_user_id,  # type: ignore
+                    name=d.zitadel_user.name if d.zitadel_user else None,
+                    email=d.zitadel_user.email if d.zitadel_user else None
+                ) if d.zitadel_user_id else None,
+                device=DeviceSchema(
+                    id=d.device_id,  # type: ignore
+                    name=d.device.name if d.device else None,
+                    device_id=d.device.device_id if d.device else None
+                ) if d.device_id else None,
+                shared_user=SharedUserSchema(
+                    id=d.shared_user_id,  # type: ignore
+                    user=ZitadelUserSchema(
+                        id=d.shared_user.shared_with_user_id,  # type: ignore
+                        name=d.shared_user.shared_with_user.name,
+                        email=d.shared_user.shared_with_user.email
+                    ) if d.shared_user else None,
+                    device=DeviceSchema(
+                        id=d.shared_user.device_user.device_id,  # type: ignore
+                        name=d.shared_user.device_user.device.name,
+                        device_id=d.shared_user.device_user.device.device_id
+                    ) if d.shared_user else None,
+                    device_user=DeviceUserSchema(
+                        id=d.shared_user.device_user_id,  # type: ignore
+                        device_username=d.shared_user.device_user.device_username,
+                        user=ZitadelUserSchema(
+                            id=d.shared_user.device_user.zitadel_user_id,  # type: ignore
+                            name=d.shared_user.device_user.zitadel_user.name,
+                            email=d.shared_user.device_user.zitadel_user.email
+                        )
+                    ) if d.shared_user else None
+                ) if d.shared_user_id else None
+            )
+            for d in items
+        ]
+    )
 
 
 def share_device_user(db: Session, admin_id: int, payload: SharedUserCreateRequest) -> SharedUser:
@@ -474,7 +629,10 @@ def share_device_user(db: Session, admin_id: int, payload: SharedUserCreateReque
     db.commit()
     db.refresh(new_shared)
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.CREATE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.CREATE, shared_user_id=new_shared.id,
+        zitadel_user_id=to_share_user.id, device_user_id=device_user.id  # type: ignore
+    )
 
     return new_shared
 
@@ -490,7 +648,12 @@ def remove_shared_user(db: Session, admin_id: int, shared_user_id: int) -> Gener
     db.delete(shared_to_remove)
     db.commit()
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.DELETE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/shared-user", action=AdminActivityAction.DELETE,
+        shared_user_id=shared_user_id,
+        zitadel_user_id=shared_to_remove.shared_with_user_id,  # type: ignore
+        device_user_id=shared_to_remove.device_user_id  # type: ignore
+    )
 
     return GenericMessageResponse(message=SuccessMessage.SHARED_USER_REMOVED)
 
@@ -546,7 +709,10 @@ def delete_zitadel_user(db: Session, zitadel_user_id: int, admin_id: int) -> Gen
     db.delete(zitadel_user)
     db.commit()
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/zitadel-users", action=AdminActivityAction.DELETE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/zitadel-users", action=AdminActivityAction.DELETE,
+        zitadel_user_id=zitadel_user_id
+    )
 
     return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
 
@@ -609,7 +775,10 @@ def update_device(db: Session, payload: DeviceSchema, admin_id: int) -> DeviceSc
     db.commit()
     db.refresh(device)
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.UPDATE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.UPDATE,
+        device_id=device.id  # type: ignore
+    )
 
     return DeviceSchema(
         id=device.id,  # type: ignore
@@ -630,7 +799,9 @@ def delete_device(db: Session, device_id: int, admin_id: int) -> GenericMessageR
     db.delete(device)
     db.commit()
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.DELETE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/devices", action=AdminActivityAction.DELETE, device_id=device_id
+    )
 
     return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
 
@@ -682,6 +853,10 @@ def get_device_user_by_id(db: Session, device_user_id: int) -> Type[DeviceUser] 
     return db.query(DeviceUser).filter(DeviceUser.id == device_user_id).first()
 
 
+def get_device_user_by_username(db: Session, device_username: str) -> Type[DeviceUser] | None:
+    return db.query(DeviceUser).filter(DeviceUser.device_username == device_username).first()
+
+
 def delete_device_user(db: Session, device_user_id: int, admin_id: int) -> GenericMessageResponse:
     shared_users = db.query(SharedUser).filter(SharedUser.device_user_id == device_user_id).all()
     for shared_user in shared_users:
@@ -691,7 +866,10 @@ def delete_device_user(db: Session, device_user_id: int, admin_id: int) -> Gener
     db.delete(device)
     db.commit()
 
-    log_admin_activity(db, admin_id=admin_id, endpoint="/device-users", action=AdminActivityAction.DELETE)
+    log_admin_activity(
+        db, admin_id=admin_id, endpoint="/device-users", action=AdminActivityAction.DELETE,
+        device_user_id=device_user_id, device_id=device.device_id, zitadel_user_id=device.zitadel_user_id
+    )
 
     return GenericMessageResponse(message=SuccessMessage.USER_REMOVED)
 

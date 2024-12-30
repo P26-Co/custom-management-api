@@ -106,8 +106,8 @@ class GenericMessageResponse(BaseModel):
 # ----------------------
 class ZitadelUserSchema(BaseModel):
     id: int
-    email: str
-    name: Optional[str | None]
+    email: Optional[str] = None
+    name: Optional[str] = None
     tenant_id: Optional[str] = None
     zitadel_user_id: Optional[str] = None
 
@@ -121,8 +121,8 @@ class DeviceUserSchema(BaseModel):
 
 class DeviceSchema(BaseModel):
     id: int
-    device_id: str
-    name: str | None
+    device_id: Optional[str] = None
+    name: Optional[str] = None
     device_users: Optional[List[DeviceUserSchema]] = None
 
 
@@ -133,7 +133,49 @@ class SharedUserSchema(BaseModel):
     device: Optional[DeviceSchema]
 
 
+class DeviceLogsSchema(BaseModel):
+    id: int
+    timestamp: str
+    activity_type: str
+    login_as: Optional[str] = None
+    device_username: Optional[DeviceUserSchema] = None
+    user: Optional[ZitadelUserSchema] = None
+    device: Optional[DeviceSchema] = None
+
+
+class AdminLogsSchema(BaseModel):
+    id: int
+    timestamp: str
+    endpoint: str
+    admin_user: AdminUserResponse
+    action: Optional[str] = None
+    device_username: Optional[DeviceUserSchema] = None
+    user: Optional[ZitadelUserSchema] = None
+    device: Optional[DeviceSchema] = None
+    shared_user: Optional[SharedUserSchema] = None
+
+
 # For listing filters, we can just use query params in the endpoint,
+class ListDeviceLogsFilters(BaseModel):
+    tenantId: Optional[str] = None
+    zitadelUserId: Optional[int] = None
+    deviceId: Optional[int] = None
+    deviceUserId: Optional[int] = None
+    page: int = 1
+    size: int = 10
+
+
+class ListAdminLogsFilters(BaseModel):
+    tenantId: Optional[str] = None
+    adminUserId: Optional[int] = None
+    zitadelUserId: Optional[int] = None
+    deviceId: Optional[int] = None
+    deviceUserId: Optional[int] = None
+    sharedUserId: Optional[int] = None
+    page: int = 1
+    size: int = 10
+
+
 class ListZitadelUsersFilters(BaseModel):
     tenantId: Optional[str] = None
     page: int = 1
@@ -169,8 +211,10 @@ class PaginatedResponse(BaseModel):
         ZitadelUserSchema |
         DeviceUserSchema |
         SharedUserSchema |
-        AdminUserResponse
-    ]
+        AdminUserResponse |
+        DeviceLogsSchema |
+        AdminLogsSchema
+        ]
     total: int
     page: int
     size: int

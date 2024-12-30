@@ -25,7 +25,9 @@ from app.schemas import (
     AdminUserCreateRequest,
     ListAdminUsersFilters,
     AdminUserUpdateRequest,
-    DeviceSchema
+    DeviceSchema,
+    ListDeviceLogsFilters,
+    ListAdminLogsFilters
 )
 from app.services import (
     email_password_login,
@@ -48,7 +50,9 @@ from app.services import (
     update_device,
     delete_zitadel_user,
     delete_device,
-    delete_device_user
+    delete_device_user,
+    list_device_logs,
+    list_admin_logs
 )
 
 # Create the Bearer security scheme
@@ -167,6 +171,58 @@ def log_activity_api(
         payload.deviceId,
         payload.deviceUsername,
         activity_type=payload.activityType
+    )
+
+
+@app.get("/log-activity", response_model=PaginatedResponse)
+def get_device_logs(
+        tenant_id: str = Query(None),
+        zitadel_user_id: int = Query(None),
+        device_id: int = Query(None),
+        device_user_id: int = Query(None),
+        page: int = Query(1),
+        size: int = Query(10),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: Session = Depends(get_db),
+):
+    decode_access_token(credentials.credentials, True)
+    return list_device_logs(
+        db,
+        ListDeviceLogsFilters(
+            tenantId=tenant_id,
+            zitadelUserId=zitadel_user_id,
+            deviceId=device_id,
+            deviceUserId=device_user_id,
+            page=page,
+            size=size
+        )
+    )
+
+
+@app.get("/admin-log-activity", response_model=PaginatedResponse)
+def get_admin_logs(
+        tenant_id: str = Query(None),
+        admin_user_id: int = Query(None),
+        zitadel_user_id: int = Query(None),
+        device_id: int = Query(None),
+        device_user_id: int = Query(None),
+        page: int = Query(1),
+        size: int = Query(10),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: Session = Depends(get_db),
+):
+    decode_access_token(credentials.credentials, True)
+    return list_admin_logs(
+        db,
+        ListAdminLogsFilters(
+            tenantId=tenant_id,
+            adminUserId=admin_user_id,
+            zitadelUserId=zitadel_user_id,
+            deviceId=device_id,
+            deviceUserId=device_user_id,
+            page=page,
+            size=size
+        )
     )
 
 

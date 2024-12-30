@@ -90,7 +90,7 @@ class DeviceActivityLog(Base, AuditColumnsMixin):
     id = Column(Integer, primary_key=True, index=True)
     zitadel_user_id = Column(Integer, ForeignKey("zitadel_users.id"))
     device_id = Column(Integer, ForeignKey("devices.id"))
-    device_username = Column(String(255))
+    device_username = Column(Integer, ForeignKey("device_users.id"))
     login_as = Column(String(255), nullable=True)
 
     # Activity type: e.g. "device_login", "user_linked", "device_created", ...
@@ -99,6 +99,7 @@ class DeviceActivityLog(Base, AuditColumnsMixin):
 
     zitadel_user = relationship("ZitadelUser", backref="device_activity_logs")
     device = relationship("Device", backref="device_activity_logs")
+    device_user = relationship("DeviceUser", backref="device_activity_logs")
 
 
 class AdminActivityLog(Base, AuditColumnsMixin):
@@ -110,5 +111,14 @@ class AdminActivityLog(Base, AuditColumnsMixin):
     action = Column(String(255), nullable=True)  # e.g. "CREATE", "DELETE", "LIST"
     timestamp = Column(DateTime, default=func.now())
 
+    zitadel_user_id = Column(Integer, ForeignKey("zitadel_users.id"), nullable=True)
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    device_user_id = Column(Integer, ForeignKey("device_users.id"), nullable=True)
+    shared_user_id = Column(Integer, ForeignKey("shared_users.id"), nullable=True)
+
     # optional relationships
     admin_user = relationship("AdminUser", backref="admin_activity_logs")
+    zitadel_user = relationship("ZitadelUser", backref="admin_activity_logs")
+    device = relationship("Device", backref="admin_activity_logs")
+    device_user = relationship("DeviceUser", backref="admin_activity_logs")
+    shared_user = relationship("SharedUser", backref="admin_activity_logs")
