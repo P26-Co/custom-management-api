@@ -363,7 +363,7 @@ def list_device_logs(db: Session, filters: ListDeviceLogsFilters) -> PaginatedRe
                 id=d.id,  # type: ignore
                 timestamp=str(d.timestamp),
                 activity_type=str(d.activity_type),
-                login_as=str(d.login_as),
+                login_as=str(d.login_as) if d.login_as else None,
                 device_username=DeviceUserSchema(
                     id=d.device_username,  # type: ignore
                     device_username=d.device_user.device_username,
@@ -548,7 +548,7 @@ def list_admin_logs(db: Session, filters: ListAdminLogsFilters) -> PaginatedResp
                 id=d.id,  # type: ignore
                 timestamp=str(d.timestamp),
                 endpoint=str(d.endpoint),
-                action=str(d.action),
+                action=str(d.action) if d.action else None,
                 admin_user=AdminUserResponse.model_validate(d.admin_user),
                 device_username=DeviceUserSchema(
                     id=d.device_user_id,  # type: ignore
