@@ -19,11 +19,11 @@ class PortalActivityLog(Base, AuditColumnsMixin):
     action = Column(String(255), nullable=True)  # e.g. "CREATE", "DELETE", "LIST"
     timestamp = Column(DateTime, default=func.now())
 
-    zitadel_user_id = Column(String(36), ForeignKey("zitadel_users.id"), nullable=True)
-    zitadel_tenant_id = Column(String(36), ForeignKey("zitadel_tenants.id"), nullable=True)
-    device_id = Column(String(36), ForeignKey("devices.id"), nullable=True)
-    device_user_id = Column(String(36), ForeignKey("device_users.id"), nullable=True)
-    shared_user_id = Column(String(36), ForeignKey("shared_users.id"), nullable=True)
+    zitadel_user_id = Column(String(36), ForeignKey("zitadel_users.id", ondelete="SET NULL"), nullable=True)
+    zitadel_tenant_id = Column(String(36), ForeignKey("zitadel_tenants.id", ondelete="SET NULL"), nullable=True)
+    device_id = Column(String(36), ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
+    device_user_id = Column(String(36), ForeignKey("device_users.id", ondelete="SET NULL"), nullable=True)
+    shared_user_id = Column(String(36), ForeignKey("shared_users.id", ondelete="SET NULL"), nullable=True)
 
     # optional relationships
     portal_user = relationship("PortalUser", backref="portal_activity_logs")

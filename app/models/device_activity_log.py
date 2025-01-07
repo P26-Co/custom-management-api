@@ -14,9 +14,9 @@ from app.models.audit import AuditColumnsMixin
 class DeviceActivityLog(Base, AuditColumnsMixin):
     __tablename__ = "device_activity_logs"
 
-    zitadel_user_id = Column(String(36), ForeignKey("zitadel_users.id"))
-    device_id = Column(String(36), ForeignKey("devices.id"))
-    device_username = Column(String(36), ForeignKey("device_users.id"))
+    zitadel_user_id = Column(String(36), ForeignKey("zitadel_users.id", ondelete="SET NULL"))
+    device_id = Column(String(36), ForeignKey("devices.id", ondelete="SET NULL"))
+    device_username = Column(String(36), ForeignKey("device_users.id", ondelete="SET NULL"))
     login_as = Column(String(255), nullable=True)
 
     # Activity type: e.g. "device_login", "user_linked", "device_created", ...
