@@ -1,0 +1,10 @@
+from app.routes import auth as auth_routes
+from app.routes import device as device_routes
+from app.routes import device_user as device_user_routes
+from app.routes import device_activity_log as device_activity_log_routes
+from app.routes import shared_user as shared_user_routes
+from app.routes import portal_user as portal_user_routes
+from app.routes import task_status as task_status_routes
+from app.routes import zitadel_user as zitadel_user_routes
+from app.routes import zitadel_tenant as zitadel_tenant_routes
+from app.routes import portal_activity_log as portal_activity_log_routes

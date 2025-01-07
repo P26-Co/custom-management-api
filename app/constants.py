@@ -3,6 +3,7 @@ from enum import Enum
 
 class Role(str, Enum):
     ADMIN = "admin"
+    TENANT_MANAGER = "tenant_manager"
 
 
 class DeviceActivityType(str, Enum):
@@ -12,7 +13,7 @@ class DeviceActivityType(str, Enum):
     device_added = "device_added"
 
 
-class AdminActivityAction(str, Enum):
+class PortalActivityAction(str, Enum):
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
@@ -21,11 +22,14 @@ class AdminActivityAction(str, Enum):
 
 class SuccessMessage(str, Enum):
     SHARED_USER_REMOVED = "Removed shared user successfully"
+    TENANT_REMOVED = "Removed tenant successfully"
     USER_REMOVED = "Removed user successfully"
+    PORTAL_USER_REMOVED = "Inactive user successfully"
 
 
 class ErrorMessage(str, Enum):
     UNKNOWN_ERROR = "Unknown error"
+    TENANT_NOT_FOUND = "Tenant not found"
     USER_NOT_FOUND = "User not found"
     SHARED_USER_NOT_FOUND = "Shared user not found"
     SHARED_USER_EXISTS = "Shared user already exists for the device user"
@@ -39,4 +43,23 @@ class ErrorMessage(str, Enum):
     INVALID_PIN = "Invalid PIN"
     DEVICE_NOT_FOUND = "Device not found. Must connect the device first."
     DEVICE_USER_NOT_FOUND = "DeviceUser not found"
-    INVALID_ADMIN_RIGHTS = "Invalid Admin Rights"
+    INVALID_RIGHTS = "Invalid Rights"
+    TASK_STATUS_NOT_FOUND = "No task found for given task_id"
+
+
+class TaskStatusCode(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    UNKNOWN = "unknown"
+
+
+class TaskType(str, Enum):
+    ZitadelUserImport = "zitadel_user_import"
+
+
+class TaskMessage(str, Enum):
+    IMPORTING_USERS = "Importing users from Zitadel"
+    IMPORTING_TENANTS = "Importing tenants from Zitadel"
